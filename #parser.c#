@@ -1,4 +1,4 @@
-#include <stdio.h>
+e#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
@@ -111,7 +111,7 @@ void parse_file ( char * filename,
     char axis;
     int type;
     int step = 100;
-    int step_3d = 30;
+    int step_3d = 10;
 
     if ( strncmp(line, "push", strlen(line)) == 0 ) {
       //printf("PUSH\b");

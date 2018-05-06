@@ -1,113 +1,110 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <math.h>
 
 #include "ml6.h"
 #include "display.h"
 #include "draw.h"
 #include "matrix.h"
-#include "math.h"
 #include "gmath.h"
 
 /*======== void scanline_convert() ==========
   Inputs: struct matrix *points
-          int i
-          screen s
-          zbuffer zb
+  int i
+  screen s
+  zbuffer zb
   Returns:
 
   Fills in polygon i by drawing consecutive horizontal (or vertical) lines.
 
   Color should be set differently for each polygon.
   ====================*/
-void scanline_convert( struct matrix *points, int i, screen s, zbuffer zb, color c) {
+void scanline_convert( struct matrix *points, int i, screen s, zbuffer zbuf, color c) {
+  double xb, yb, zb, xm, ym, zm, xt, yt, zt;
+  double x0, x1, z0, z1;
+  double cx0, cx1, cz0, cz1;
+  double coords[3][3];  
+  
+  int ind;
+  for(ind = 0; ind < 3; ind++) {
+    coords[0][ind] = points->m[0][ind + i];
+    coords[1][ind] = points->m[1][ind + i];
+    coords[2][ind] = points->m[2][ind + i];
+  }
 
-  int top, mid, bot, y;
-  int distance0, distance1, distance2;
-  double x0, x1, y0, y1, y2, dx0, dx1, z0, z1, dz0, dz1;
-  int flip = 0;
+  double xtmp, ytmp, ztmp;
+  
+  // Ordering coordinates based off y-value
+  if (coords[1][0] > coords[1][1]){
+    // yb > ym
+    xtmp = coords[0][1];
+    ytmp = coords[1][1];
+    ztmp = coords[2][1];
+    coords[0][1] = coords[0][0];
+    coords[1][1] = coords[1][0];
+    coords[2][1] = coords[2][0];
+    coords[0][0] = xtmp;
+    coords[1][0] = ytmp;
+    coords[2][0] = ztmp;
+  }
 
-  z0 = z1 = dz0 = dz1 = 0;
+  if (coords[1][0] > coords[1][2]) {
+    // yb > yt
+    xtmp = coords[0][0];
+    ytmp = coords[1][0];
+    ztmp = coords[2][0];
+    coords[0][0] = coords[0][2];
+    coords[1][0] = coords[1][2];
+    coords[2][0] = coords[2][2];
+    coords[0][2] = xtmp;
+    coords[1][2] = ytmp;
+    coords[2][2] = ztmp;
+  }
 
-  y0 = points->m[1][i];
-  y1 = points->m[1][i+1];
-  y2 = points->m[1][i+2];
+  if(coords[1][1] > coords[1][2]) {
+    // ym > yt
+    xtmp = coords[0][1];
+    ytmp = coords[1][1];
+    ztmp = coords[2][1];
+    coords[0][1] = coords[0][2];
+    coords[1][1] = coords[1][2];
+    coords[2][1] = coords[2][2];
+    coords[0][2] = xtmp;
+    coords[1][2] = ytmp;
+    coords[2][2] = ztmp;    
+  }
+  
+  // Setting values to variables
+  xb = coords[0][0], yb = coords[1][0], zb = coords[2][0];
+  xm = coords[0][1], ym = coords[1][1], zm = coords[2][1];
+  xt = coords[0][2], yt = coords[1][2], zt = coords[2][2];
+  x0 = xb, x1 = xb, z0 = zb, z1 = zb;
 
-  c.red = (23 * (i/3))%255;
-  c.green = (109 * (i/3))%255;
-  c.blue = (c.blue+(227 * (i/3)))%255;
+  // Setting increment values
+  cx0 = (xt - xb) / (yt - yb);
+  cz0 = (zt - zb) / (yt - yb);
+  cx1 = (xm - xb) / (ym - yb);
+  cz1 = (zm - zb) / (ym - yb);
 
-  //find bot, mid, top
-  if ( y0 <= y1 && y0 <= y2) {
-    bot = i;
-    if (y1 <= y2) {
-      mid = i+1;
-      top = i+2;
-    }
-    else {
-      mid = i+2;
-      top = i+1;
-    }
-  }//end y0 bottom
-  else if (y1 <= y0 && y1 <= y2) {
-    bot = i+1;
-    if (y0 <= y2) {
-      mid = i;
-      top = i+2;
-    }
-    else {
-      mid = i+2;
-      top = i;
-    }
-  }//end y1 bottom
-  else {
-    bot = i+2;
-    if (y0 <= y1) {
-      mid = i;
-      top = i+1;
-    }
-    else {
-      mid = i+1;
-      top = i;
-    }
-  }//end y2 bottom
-  //printf("ybot: %0.2f, ymid: %0.2f, ytop: %0.2f\n", (points->m[1][bot]),(points->m[1][mid]), (points->m[1][top]));
-  /* printf("bot: (%0.2f, %0.2f, %0.2f) mid: (%0.2f, %0.2f, %0.2f) top: (%0.2f, %0.2f, %0.2f)\n", */
+  // Bottom to middle
+  int y;
+  for (y = (int)yb; y < (int)ym; y++) {
+    draw_line(x0, y, z0, x1, y, z1, s, zbuf, c);
+    x0 += cx0, z0 += cz0;
+    x1 += cx1, z1 += cz1;
+  }
 
-  x0 = points->m[0][bot];
-  x1 = points->m[0][bot];
-  z0 = points->m[2][bot];
-  z1 = points->m[2][bot];
-  y = (int)(points->m[1][bot]);
-
-  distance0 = (int)(points->m[1][top]) - y;
-  distance1 = (int)(points->m[1][mid]) - y;
-  distance2 = (int)(points->m[1][top]) - (int)(points->m[1][mid]);
-
-  //printf("distance0: %d distance1: %d distance2: %d\n", distance0, distance1, distance2);
-  dx0 = distance0 > 0 ? (points->m[0][top]-points->m[0][bot])/distance0 : 0;
-  dx1 = distance1 > 0 ? (points->m[0][mid]-points->m[0][bot])/distance1 : 0;
-  dz0 = distance0 > 0 ? (points->m[2][top]-points->m[2][bot])/distance0 : 0;
-  dz1 = distance1 > 0 ? (points->m[2][mid]-points->m[2][bot])/distance1 : 0;
-
-  while ( y <= (int)points->m[1][top] ) {
-    //printf("\tx0: %0.2f x1: %0.2f y: %d\n", x0, x1, y);
-    draw_line(x0, y, z0, x1, y, z1, s, zb, c);
-
-    x0+= dx0;
-    x1+= dx1;
-    z0+= dz0;
-    z1+= dz1;
-    y++;
-
-    if ( !flip && y >= (int)(points->m[1][mid]) ) {
-      flip = 1;
-      dx1 = distance2 > 0 ? (points->m[0][top]-points->m[0][mid])/distance2 : 0;
-      dz1 = distance2 > 0 ? (points->m[2][top]-points->m[2][mid])/distance2 : 0;
-      x1 = points->m[0][mid];
-      z1 = points->m[2][mid];
-    }//end flip code
-  }//end scanline loop
+  cx1 = (xt - xm) / (yt - ym);
+  cz1 = (zt - zm) / (yt - ym);
+  
+  x1 = xm, z1 = zm;
+  // Middle to top
+  for (y = (int)ym; y < (int)yt; y++) {
+    draw_line(x0, y, z0, x1, y, z1, s, zbuf, c);
+    x0 += cx0, z0 += cz0;
+    x1 += cx1, z1 += cz1;
+  } 
 }
 
 /*======== void add_polygon() ==========
@@ -167,28 +164,29 @@ void draw_polygons(struct matrix *polygons, screen s, zbuffer zb,
       color c = get_lighting(normal, view, ambient, light, areflect, dreflect, sreflect);
 
       scanline_convert(polygons, point, s, zb, c);
-
-      draw_line( polygons->m[0][point],
-                 polygons->m[1][point],
-                 polygons->m[2][point],
-                 polygons->m[0][point+1],
-                 polygons->m[1][point+1],
-                 polygons->m[2][point+1],
-                 s, zb, c);
-      draw_line( polygons->m[0][point+2],
-                 polygons->m[1][point+2],
-                 polygons->m[2][point+2],
-                 polygons->m[0][point+1],
-                 polygons->m[1][point+1],
-                 polygons->m[2][point+1],
-                 s, zb, c);
-      draw_line( polygons->m[0][point],
-                 polygons->m[1][point],
-                 polygons->m[2][point],
-                 polygons->m[0][point+2],
-                 polygons->m[1][point+2],
-                 polygons->m[2][point+2],
-                 s, zb, c);
+      /*
+	draw_line( polygons->m[0][point],
+	polygons->m[1][point],
+	polygons->m[2][point],
+	polygons->m[0][point+1],
+	polygons->m[1][point+1],
+	polygons->m[2][point+1],
+	s, zb, c);
+	draw_line( polygons->m[0][point+2],
+	polygons->m[1][point+2],
+	polygons->m[2][point+2],
+	polygons->m[0][point+1],
+	polygons->m[1][point+1],
+	polygons->m[2][point+1],
+	s, zb, c);
+	draw_line( polygons->m[0][point],
+	polygons->m[1][point],
+	polygons->m[2][point],
+	polygons->m[0][point+2],
+	polygons->m[1][point+2],
+	polygons->m[2][point+2],
+	s, zb, c);
+      */
     }
   }
 }
